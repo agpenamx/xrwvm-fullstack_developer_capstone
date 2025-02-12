@@ -1,93 +1,110 @@
-import React, { useState,useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+// ✅ Import necessary modules
+import React, { useState, useEffect } from "react";
 import "./Dealers.css";
-import "../assets/style.css";
-import positive_icon from "../assets/positive.png"
-import neutral_icon from "../assets/neutral.png"
-import negative_icon from "../assets/negative.png"
-import review_icon from "../assets/reviewbutton.png"
-import Header from '../Header/Header';
 
-const Dealer = () => {
+const Dealers = () => {
+  // ✅ State Management
+  const [dealers, setDealers] = useState([]);
+  const [selectedState, setSelectedState] = useState("All");
 
+  // ✅ Correct API Endpoint
+  let root_url = window.location.origin;
+  let dealers_url = `${root_url}/djangoapp/get_dealers/`;  // ✅ This worked
 
-  const [dealer, setDealer] = useState({});
-  const [reviews, setReviews] = useState([]);
-  const [unreviewed, setUnreviewed] = useState(false);
-  const [postReview, setPostReview] = useState(<></>)
-
-  let curr_url = window.location.href;
-  let root_url = curr_url.substring(0,curr_url.indexOf("dealer"));
-  let params = useParams();
-  let id =params.id;
-  let dealer_url = root_url+`djangoapp/dealer/${id}`;
-  let reviews_url = root_url+`djangoapp/reviews/dealer/${id}`;
-  let post_review = root_url+`postreview/${id}`;
-  
-  const get_dealer = async ()=>{
-    const res = await fetch(dealer_url, {
-      method: "GET"
-    });
-    const retobj = await res.json();
-    
-    if(retobj.status === 200) {
-      let dealerobjs = Array.from(retobj.dealer)
-      setDealer(dealerobjs[0])
-    }
-  }
-
-  const get_reviews = async ()=>{
-    const res = await fetch(reviews_url, {
-      method: "GET"
-    });
-    const retobj = await res.json();
-    
-    if(retobj.status === 200) {
-      if(retobj.reviews.length > 0){
-        setReviews(retobj.reviews)
-      } else {
-        setUnreviewed(true);
-      }
-    }
-  }
-
-  const senti_icon = (sentiment)=>{
-    let icon = sentiment === "positive"?positive_icon:sentiment==="negative"?negative_icon:neutral_icon;
-    return icon;
-  }
-
+  // ✅ Fetch Dealers on Mount
   useEffect(() => {
-    get_dealer();
-    get_reviews();
-    if(sessionStorage.getItem("username")) {
-      setPostReview(<a href={post_review}><img src={review_icon} style={{width:'10%',marginLeft:'10px',marginTop:'10px'}} alt='Post Review'/></a>)
+    fetchDealers();  // ✅ Correctly fetching all dealers
+  }, []);
 
-      
+  const fetchDealers = async (state = "All") => {
+    let url = state === "All" ? dealers_url : `${dealers_url}${state}/`;  // ✅ No query params
+    console.log(`🔍 Fetching dealers from: ${url}`);
+
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.status === 200 && data.dealers) {
+        setDealers(data.dealers);
+      } else {
+        setDealers([]);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching dealers:", error);
     }
-  },[]);  
+  };
 
+  const handleStateChange = (event) => {
+    let state = event.target.value;
+    setSelectedState(state);
+    fetchDealers(state);
+  };
 
-return(
-  <div style={{margin:"20px"}}>
-      <Header/>
-      <div style={{marginTop:"10px"}}>
-      <h1 style={{color:"grey"}}>{dealer.full_name}{postReview}</h1>
-      <h4  style={{color:"grey"}}>{dealer['city']},{dealer['address']}, Zip - {dealer['zip']}, {dealer['state']} </h4>
-      </div>
-      <div class="reviews_panel">
-      {reviews.length === 0 && unreviewed === false ? (
-        <text>Loading Reviews....</text>
-      ):  unreviewed === true? <div>No reviews yet! </div> :
-      reviews.map(review => (
-        <div className='review_panel'>
-          <img src={senti_icon(review.sentiment)} className="emotion_icon" alt='Sentiment'/>
-          <div className='review'>{review.review}</div>
-          <div className="reviewer">{review.name} {review.car_make} {review.car_model} {review.car_year}</div>
-        </div>
-      ))}
-    </div>  
-  </div>
-)
-}
+  return (
+    <div>
+      <h1>Dealerships</h1>
+      <label>Filter by State:</label>
+      <select value={selectedState} onChange={handleStateChange}>
+        <option value="All">All States</option>
+        <option value="Texas">Texas</option>
+        <option value="California">California</option>
+        <option value="Pennsylvania">Pennsylvania</option>
+        <option value="Maryland">Maryland</option>
+      </select>
 
-export default Dealer
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Dealer Name</th>
+            <th>City</th>
+            <th>Address</th>
+            <th>Zip</th>
+          </tr>
+        </thead>
+        <tbody>
+          {dealers.map((dealer) => (
+            <tr key={dealer.id}>
+              <td>{dealer.id}</td>
+              <td>
+                <a href={`/dealer/${dealer.id}`}>{dealer.full_name}</a>
+              </td>
+              <td>{dealer.city}</td>
+              <td>{dealer.address}</td>
+              <td>{dealer.zip}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+export default Dealers;
+
+/*
+------------------------------------
+🔄 **CHANGES MADE COMPARED TO BROKEN VERSION**
+------------------------------------
+
+1️⃣ **API Endpoint Fix**  
+   - ✅ `let dealers_url = ${root_url}/djangoapp/get_dealers/;`
+   - ❌ Broken version had: `let dealers_url = ${root_url}/api/get_dealers/;`
+   - 🛠 The API changed to `api/`, breaking the previous working setup.
+
+2️⃣ **Fixed `useEffect` Hook**
+   - ✅ `useEffect(() => { fetchDealers(); }, []);`
+   - ❌ Broken version used `useEffect(() => { fetchDealers(selectedState); }, [selectedState]);`
+   - 🛠 This caused a **missing dependency error**.
+
+3️⃣ **Fixed API Request URL**
+   - ✅ `let url = state === "All" ? dealers_url : ${dealers_url}${state}/;`
+   - ❌ Broken version used: `let url = state === "All" ? dealers_url : ${dealers_url}?state=${state};`
+   - 🛠 Using query parameters caused **backend filtering issues**.
+
+4️⃣ **Removed Faulty `useEffect` Dependencies**
+   - ✅ This version does **not** depend on `selectedState` inside `useEffect`.
+   - 🛠 Prevents unnecessary re-renders.
+
+------------------------------------
+*/

@@ -1,15 +1,16 @@
-# Uncomment the imports below before you add the function code
-import requests  # Added to enable API calls
+# ✅ Import required modules
+import requests  # ✅ Added to enable API calls
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# ✅ Load environment variables from .env file
 load_dotenv()
 
-# Retrieve backend API URLs from .env file
-backend_url = os.getenv('backend_url', default="http://localhost:3030")
-sentiment_analyzer_url = os.getenv('sentiment_analyzer_url', default="http://localhost:5050/")
+# ✅ Retrieve backend API URLs from .env file (Fixed Double Slash Issue)
+backend_url = os.getenv('backend_url', default="http://localhost:3030").rstrip("/")  # ✅ Ensure no trailing slash
+sentiment_analyzer_url = os.getenv('sentiment_analyzer_url', default="http://localhost:5050/").rstrip("/")  # ✅ Ensure no trailing slash
 
+# ✅ Improved GET Request Handling
 def get_request(endpoint, **kwargs):
     """
     Function to make GET requests to the backend API.
@@ -21,23 +22,31 @@ def get_request(endpoint, **kwargs):
     Returns:
         JSON response from the backend API.
     """
-    params = ""
-    if kwargs:
-        for key, value in kwargs.items():
-            params += f"{key}={value}&"
+    # ✅ Fix: Ensure `state` is explicitly passed
+    if "state" in kwargs and kwargs["state"] == "All":
+        del kwargs["state"]  # ✅ Remove `state` parameter if "All" is selected
+
+    params = "&".join(f"{key}={value}" for key, value in kwargs.items()) if kwargs else ""
     
-    request_url = f"{backend_url}{endpoint}?{params}"
-    print(f"GET from {request_url}")
+    request_url = f"{backend_url}/{endpoint}?{params}".rstrip("?")  # ✅ Ensure proper URL formatting
+    print(f"🔍 GET from {request_url}")  # ✅ Debugging log to verify request
 
     try:
-        # Call get method of requests library with URL and parameters
         response = requests.get(request_url)
-        return response.json()
-    except Exception as err:
-        print(f"Unexpected {err=}, {type(err)=}")
-        print("Network exception occurred")
-        return None
 
+        if response.status_code != 200:
+            print(f"⚠️ Backend returned {response.status_code}: {response.text}")
+            return {"error": f"Backend returned {response.status_code}", "details": response.text}
+        
+        return response.json()
+    except requests.exceptions.JSONDecodeError:
+        print(f"❌ Invalid JSON received from backend at {request_url}")
+        return {"error": "Invalid JSON received from backend"}
+    except requests.exceptions.RequestException as err:
+        print(f"❌ Network Exception: {err}")
+        return {"error": f"Request failed: {str(err)}"}
+
+# ✅ FIXED `analyze_review_sentiments` Function
 def analyze_review_sentiments(text):
     """
     Function to analyze sentiment using the deployed microservice.
@@ -48,18 +57,25 @@ def analyze_review_sentiments(text):
     Returns:
         JSON response containing sentiment analysis.
     """
-    request_url = f"{sentiment_analyzer_url}analyze/{text}"
-    print(f"Calling sentiment analyzer at {request_url}")
+    request_url = f"{sentiment_analyzer_url}/analyze/{text}"
+    print(f"🔍 Calling sentiment analyzer at {request_url}")
 
     try:
-        # Call get method of requests library with URL
         response = requests.get(request_url)
-        return response.json()
-    except Exception as err:
-        print(f"Unexpected {err=}, {type(err)=}")
-        print("Network exception occurred")
-        return {"sentiment": "neutral"}
 
+        if response.status_code != 200:
+            print(f"⚠️ Sentiment Analyzer returned {response.status_code}: {response.text}")
+            return {"error": f"Sentiment Analyzer error {response.status_code}", "details": response.text}
+
+        return response.json()
+    except requests.exceptions.JSONDecodeError:
+        print(f"❌ Invalid JSON from Sentiment Analyzer at {request_url}")
+        return {"sentiment": "neutral", "error": "Invalid JSON response"}
+    except requests.exceptions.RequestException as err:
+        print(f"❌ Network Exception: {err}")
+        return {"sentiment": "neutral", "error": f"Request failed: {str(err)}"}
+
+# ✅ Improved POST Request Handling
 def post_review(data_dict):
     """
     Function to post a review to the backend.
@@ -71,13 +87,20 @@ def post_review(data_dict):
         JSON response from the backend.
     """
     request_url = f"{backend_url}/insert_review"
-    print(f"POST to {request_url}")
+    print(f"🔍 POST to {request_url}")
 
     try:
         response = requests.post(request_url, json=data_dict)
-        print(response.json())
+
+        if response.status_code != 200:
+            print(f"⚠️ Backend returned {response.status_code}: {response.text}")
+            return {"error": f"Backend error {response.status_code}", "details": response.text}
+
+        print(f"✅ POST Response: {response.json()}")
         return response.json()
-    except Exception as err:
-        print(f"Unexpected {err=}, {type(err)=}")
-        print("Network exception occurred")
-        return {"status": "failed"}
+    except requests.exceptions.JSONDecodeError:
+        print(f"❌ Invalid JSON response from backend at {request_url}")
+        return {"status": "failed", "error": "Invalid JSON response"}
+    except requests.exceptions.RequestException as err:
+        print(f"❌ Network Exception: {err}")
+        return {"status": "failed", "error": f"Request failed: {str(err)}"}

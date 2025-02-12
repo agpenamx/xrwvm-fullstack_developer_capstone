@@ -13,11 +13,13 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import TemplateView
 from django.conf.urls.static import static
 from django.conf import settings
+from djangoapp import views  # ✅ Import views for API endpoints
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,4 +29,15 @@ urlpatterns = [
     path('about/', TemplateView.as_view(template_name="About.html")),
     path('contact/', TemplateView.as_view(template_name="Contact.html")),
     path('', TemplateView.as_view(template_name="Home.html")),
+
+    # ✅ FRONTEND ROUTES (Handled by React)
+    path('dealers/', TemplateView.as_view(template_name="index.html")),
+    path('dealer/<int:dealer_id>/', TemplateView.as_view(template_name="index.html")),
+    path('postreview/<int:dealer_id>/', TemplateView.as_view(template_name="index.html")),
+
+    # ✅ BACKEND API ROUTES (Django Serves JSON Responses)
+    path('api/get_dealers/', views.get_dealerships, name='api_get_dealers'),
+    path('api/dealer/<int:dealer_id>/', views.get_dealer_details, name='api_dealer_details'),
+    path('api/reviews/dealer/<int:dealer_id>/', views.get_dealer_reviews, name='api_dealer_reviews'),
+    path('api/add_review/', views.add_review, name='api_add_review'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
