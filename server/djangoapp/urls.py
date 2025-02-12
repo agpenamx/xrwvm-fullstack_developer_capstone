@@ -15,6 +15,9 @@ urlpatterns = [
     # path for logout
     path(route='logout', view=views.logout_user, name='logout'),
 
+    # ✅ ADDED ROUTE FOR LAB 4: Fetch car makes and models
+    path(route='get_cars', view=views.get_cars, name='get_cars'),
+
     # path for dealer reviews view
 
     # path for add a review view
