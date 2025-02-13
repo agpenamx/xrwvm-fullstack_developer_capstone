@@ -1,7 +1,11 @@
 """
 djangoproj URL Configuration
 
-Defines URL patterns for Django, including admin panel, API endpoints, and frontend routes.
+Defines URL patterns for Django, including:
+- Admin panel
+- API endpoints (for authentication & dealership management)
+- Frontend template routing
+- React single-page app catch-all route
 """
 
 from django.contrib import admin
@@ -12,7 +16,7 @@ from django.conf import settings
 from djangoapp import views  # ✅ Import views for API endpoints
 
 urlpatterns = [
-    # ✅ Admin Panel
+    # ✅ ADMIN PANEL
     path('admin/', admin.site.urls),
 
     # ✅ AUTHENTICATION ROUTES (🔧 FIXED: Use views instead of templates)
@@ -27,7 +31,12 @@ urlpatterns = [
 
     # ✅ BACKEND API ROUTES (Django Serves JSON Responses)
     path('api/get_dealers/', views.get_dealerships, name='api_get_dealers'),  
-    path('api/dealer/<int:dealer_id>/', views.get_dealer_details, name='api_dealer_details'),
+    
+    # 🔧 **COMMENTED OUT: `get_dealer_details` (Causing AttributeError)**
+    # ❌ Original Issue: `views.get_dealer_details` does not exist
+    # ❌ Temporary Fix: Commenting it out until implementation is confirmed
+    # path('api/dealer/<int:dealer_id>/', views.get_dealer_details, name='api_dealer_details'),  
+
     path('api/reviews/dealer/<int:dealer_id>/', views.get_dealer_reviews, name='api_dealer_reviews'),
     path('api/add_review/', views.add_review, name='api_add_review'),
 
@@ -36,6 +45,9 @@ urlpatterns = [
     path('dealer/<int:dealer_id>/', TemplateView.as_view(template_name="index.html")),
     path('postreview/<int:dealer_id>/', TemplateView.as_view(template_name="index.html")),
 
-    # ✅ React Catch-All Route (Handles React Routing)
+    # ✅ EXPLICITLY ADDED `searchcars` ROUTE FROM EXEMPLAR
+    path('searchcars/<int:dealer_id>/', TemplateView.as_view(template_name="index.html"), name='searchcars'),
+
+    # ✅ REACT CATCH-ALL ROUTE (Ensures React handles routing properly)
     re_path(r'^.*$', TemplateView.as_view(template_name='index.html'), name='react-app'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

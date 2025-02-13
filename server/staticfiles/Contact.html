@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Contact Us</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/bootstrap.min.css">
+  <!-- 🔧 SUGGESTION: Ensure that style.css and bootstrap.min.css are correctly located in your /static folder -->
+</head>
+<body>
+  <div>
+    <nav class="navbar navbar-expand-lg navbar-light" style="background-color:darkturquoise; height: 1in;">
+      <div class="container-fluid">
+        <h2 style="padding-right: 5%;">Dealerships</h2>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarText">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link" style="font-size: larger;" aria-current="page" href="/">Home</a>
+              <!-- 🔧 SUGGESTION: Confirm that the Home link navigates to the correct route -->
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" style="font-size: larger;" href="/about">About Us</a>
+              <!-- 🔧 SUGGESTION: Verify that the About page loads correctly -->
+            </li>
+            <li class="nav-item">
+              <a class="nav-link active" style="font-size: larger;" href="/contact">Contact Us</a>
+              <!-- 🔧 SUGGESTION: "active" class highlights the current page -->
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container" style="margin-top: 5%;">
+      <div class="card">
+        <div class="card-header text-center">
+          <h1>Contact Us</h1>
+          <!-- 🔧 SUGGESTION: The header clearly identifies the page -->
+        </div>
+        <div class="card-body">
+          <p>We’d love to hear from you! Whether you have questions about our dealership, services, or want to book an appointment, feel free to contact us.</p>
+          
+          <h3>📍 Our Address</h3>
+          <p>Best Cars Dealership HQ</p>
+          <p>1234 Main Street, Los Angeles, CA, 90001</p>
+          
+          <h3>📞 Contact Details</h3>
+          <p><strong>Phone:</strong> (123) 456-7890</p>
+          <p><strong>Email:</strong> support@bestcars.com</p>
+          
+          <h3>⏰ Business Hours</h3>
+          <p>Monday - Friday: 9:00 AM - 7:00 PM</p>
+          <p>Saturday: 10:00 AM - 5:00 PM</p>
+          <p>Sunday: Closed</p>
+          
+          <h3>📩 Get in Touch</h3>
+          <form>
+            <div class="mb-3">
+              <label for="name" class="form-label">Your Name</label>
+              <input type="text" class="form-control" id="name" placeholder="Enter your name">
+              <!-- 🔧 SUGGESTION: Consider adding "name" attribute for form submission if needed -->
+            </div>
+            <div class="mb-3">
+              <label for="email" class="form-label">Your Email</label>
+              <input type="email" class="form-control" id="email" placeholder="Enter your email">
+              <!-- 🔧 SUGGESTION: Consider adding "name" attribute for form submission if needed -->
+            </div>
+            <div class="mb-3">
+              <label for="message" class="form-label">Your Message</label>
+              <textarea class="form-control" id="message" rows="4" placeholder="Write your message here"></textarea>
+              <!-- 🔧 SUGGESTION: Consider adding "name" attribute if form submission is implemented -->
+            </div>
+            <button type="submit" class="btn btn-primary">Send Message</button>
+            <!-- 🔧 REMINDER: Implement form submission logic if needed -->
+          </form>
+        </div>
+      </div>
+    </div>
+    <!-- 🔧 REMINDER: Take a screenshot of the Contact Us page (including the URL) for peer review -->
+  </div>
+</body>
+</html>

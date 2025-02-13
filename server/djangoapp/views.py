@@ -13,63 +13,94 @@ from .restapis import get_request, analyze_review_sentiments, post_review
 
 # ✅ Logger setup
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
-# ✅ Authentication Functions
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+# ✅ Utility function for consistent JSON responses
+def json_response(data, status=200):
+    return JsonResponse(data, status=status)
+
+# ===== 🔐 Authentication Views =====
+
 @csrf_exempt
 def login_user(request):
+    if request.method != "POST":
+        return json_response({"error": "Invalid request method"}, status=400)
+    
     try:
         data = json.loads(request.body)
-        username = data.get('userName')
-        password = data.get('password')
+    except json.JSONDecodeError:
+        logger.error("❌ JSON decode error in login_user")
+        return json_response({"error": "Invalid JSON format"}, status=400)
 
-        user = authenticate(username=username, password=password)
-        if user is not None:
-            login(request, user)
-            response = JsonResponse({"userName": username, "status": "Authenticated"})
-            # 🔧 Markup: Ensure session persists after login
-            # return JsonResponse({"userName": username, "status": "Authenticated"})  # ❌ Previous version (session may not persist)
-            response.set_cookie("sessionid", request.session.session_key)  # ✅ Added session persistence
-            return response
-        else:
-            return JsonResponse({"userName": username, "error": "Invalid credentials"}, status=401)
-    except Exception as e:
-        logger.error(f"Login error: {e}")
-        return JsonResponse({"error": "An error occurred while logging in"}, status=500)
+    username = data.get("userName")
+    password = data.get("password")
+    user = authenticate(username=username, password=password)
 
+    if user is not None:
+        login(request, user)
+        request.session.save()  # ✅ Ensure session is saved
+
+        response = json_response({"userName": username, "status": "Authenticated"})
+        response.set_cookie("sessionid", request.session.session_key, httponly=True, samesite='Lax')
+
+        logger.info(f"✅ User '{username}' logged in successfully.")
+        return response
+
+    logger.warning(f"❌ Authentication failed for user '{username}'.")
+    return json_response({"error": "Invalid credentials"}, status=401)
+
+@csrf_exempt
 def logout_user(request):
+    if request.method != "POST":
+        return json_response({"error": "Invalid request method"}, status=400)
+    
     logout(request)
-    return JsonResponse({"userName": ""})
+    logger.info("✅ User logged out successfully.")
+    return json_response({"userName": ""})
 
 @csrf_exempt
 def register_user(request):
+    if request.method != "POST":
+        return json_response({"error": "Invalid request method"}, status=400)
+    
     try:
         data = json.loads(request.body)
-        username = data.get('userName')
-        password = data.get('password')
-        first_name = data.get('firstName')
-        last_name = data.get('lastName')
-        email = data.get('email')
+    except json.JSONDecodeError:
+        logger.error("❌ JSON decode error in register_user")
+        return json_response({"error": "Invalid JSON format"}, status=400)
 
-        if not username or not password:
-            return JsonResponse({"error": "Missing username or password"}, status=400)
+    username = data.get("userName")
+    password = data.get("password")
+    first_name = data.get("firstName")
+    last_name = data.get("lastName")
+    email = data.get("email")
 
-        if User.objects.filter(username=username).exists():
-            return JsonResponse({"userName": username, "error": "Already Registered"}, status=409)
+    if User.objects.filter(username=username).exists():
+        logger.warning(f"❌ Registration attempt with existing username '{username}'.")
+        return json_response({"userName": username, "error": "Already Registered"}, status=409)
 
-        user = User.objects.create_user(
-            username=username, first_name=first_name, last_name=last_name, password=password, email=email
-        )
-        # ✅ FIXED: Explicitly save session before returning (deep seek)
+    try:
+        user = User.objects.create_user(username=username, first_name=first_name, last_name=last_name, password=password, email=email)
         login(request, user)
-        request.session.save()  # 🔥 Critical for session persistence
-        response = JsonResponse({"userName": username, "status": "Authenticated"})
-        response.set_cookie("sessionid", request.session.session_key, httponly=True, samesite='Lax')
-        return response #(deep seek end of code added or replaced)
-    except Exception as e:
-        logger.error(f"Registration error: {e}")
-        return JsonResponse({"error": "An error occurred while registering"}, status=500)
+        request.session.save()  # ✅ Ensure session is saved
 
-# ✅ Fetch Car Models & Makes
+        response = json_response({"userName": username, "status": "Authenticated"})
+        response.set_cookie("sessionid", request.session.session_key, httponly=True, samesite='Lax')
+
+        logger.info(f"✅ User '{username}' registered and authenticated successfully.")
+        return response
+    except Exception as e:
+        logger.error(f"❌ Registration error: {e}")
+        return json_response({"error": "Registration failed"}, status=500)
+
+# ===== 🚗 Fetch Car Models & Makes =====
+
 def get_cars(request):
     try:
         count = CarMake.objects.count()
@@ -77,120 +108,81 @@ def get_cars(request):
             initiate()  
         car_models = CarModel.objects.select_related('car_make')
         cars = [{"CarModel": car_model.name, "CarMake": car_model.car_make.name} for car_model in car_models]
-        return JsonResponse({"CarModels": cars})
+        return json_response({"CarModels": cars})
     except Exception as e:
-        logger.error(f"Error fetching car models: {e}")
-        return JsonResponse({"error": "Failed to retrieve cars"}, status=500)
+        logger.error(f"❌ Error fetching car models: {e}")
+        return json_response({"error": "Failed to retrieve cars"}, status=500)
 
-# ✅ Fetch Dealerships with Authentication & JSON Validation
-# ✅ Fetch Dealerships with Authentication & Session Handling
+# ===== 🏬 Fetch Dealerships & Reviews =====
+
 def get_dealerships(request, state="All"):
-    """
-    Fetches all dealerships from the backend API.
-    - Ensures authentication by passing the session ID.
-    - If authentication fails, returns an error.
-    - Prevents JSONDecodeError by verifying content type.
-    """
-    session = requests.Session()  # ✅ Create session for cookies
-
+    session = requests.Session()
     endpoint = "/fetchDealers" if state == "All" else f"/fetchDealers/{state}"
 
-    headers = {}  # ✅ Prepare headers
+    headers = {}
 
-    # 🔧 FIX: Properly handle authentication
     if request.user.is_authenticated:
         session_cookies = request.COOKIES
         headers["Cookie"] = "; ".join([f"{key}={value}" for key, value in session_cookies.items()])
-
-        # ✅ Pass Django session ID explicitly
         session_id = request.session.session_key
         if session_id:
-            headers["Authorization"] = f"Bearer {session_id}"  # 🔥 Added explicit session handling
-
-        logger.debug(f"🔍 Using session cookies: {headers['Cookie']}")  
-    else:
-        logger.error("❌ User is not authenticated. Access denied.")
-        return JsonResponse({"error": "User not authenticated", "status": 403})
+            headers["Authorization"] = f"Bearer {session_id}"
 
     try:
-       # ✅ FIXED: Use Docker service name instead of localhost
-        BACKEND_SERVICE_HOST = os.getenv("BACKEND_SERVICE_HOST", "backend-service")  # Match docker-compose service name
+        BACKEND_SERVICE_HOST = os.getenv("BACKEND_SERVICE_HOST", "backend-service")
         response = session.get(f"http://{BACKEND_SERVICE_HOST}:8888{endpoint}", headers=headers)
 
-        # ✅ LOG response headers and content for debugging
         logger.debug(f"🔍 Response Status: {response.status_code}")
-        logger.debug(f"🔍 Response Headers: {response.headers}")
-        logger.debug(f"🔍 Response Content (First 500 chars): {response.text[:500]}")  
+        logger.debug(f"🔍 Response Content: {response.text[:500]}")
 
-        # 🔧 FIX: If response is not JSON, handle it
-        content_type = response.headers.get("Content-Type", "")
-        if "application/json" not in content_type:
-            logger.error("❌ API did not return JSON. Possible OAuth issue.")
-            return JsonResponse({"status": 500, "error": "Backend returned non-JSON response. Check authentication."})
+        if "application/json" not in response.headers.get("Content-Type", ""):
+            return json_response({"status": 500, "error": "Backend did not return JSON. Check authentication."})
 
-        # ✅ Now we are sure it's JSON, so we can safely parse it
-        return JsonResponse({"status": 200, "dealers": response.json()})
-
-    except requests.exceptions.JSONDecodeError as json_err:
-        logger.error(f"❌ JSON Decode Error: {json_err}")
-        return JsonResponse({"status": 500, "error": "Invalid JSON received from backend"})
-
+        return json_response({"status": 200, "dealers": response.json()})
     except requests.exceptions.RequestException as req_err:
-        logger.error(f"❌ Network Exception: {req_err}")
-        return JsonResponse({"status": 500, "error": f"Request failed: {str(req_err)}"})
+        logger.error(f"❌ Request Exception: {req_err}")
+        return json_response({"status": 500, "error": "Request failed"})
 
-# ✅ Fetch dealer details by ID
-def get_dealer_details(request, dealer_id):
-    try:
-        endpoint = f"/fetchDealer/{dealer_id}"
-        dealership = get_request(endpoint)
-
-        logger.debug(f"Fetching dealer details for ID: {dealer_id} -> Response: {dealership}")
-
-        if not dealership:
-            return JsonResponse({"status": 404, "error": "Dealer not found"})
-
-        return JsonResponse({"status": 200, "dealer": dealership})
-    except Exception as e:
-        logger.error(f"Error fetching dealer details: {e}")
-        return JsonResponse({"status": 500, "error": "Failed to retrieve dealer details"})
-
-# ✅ Fetch dealer reviews by ID
+# ✅ **Re-added `get_dealer_reviews`**
 def get_dealer_reviews(request, dealer_id):
     try:
         endpoint = f"/fetchReviews/dealer/{dealer_id}"
         reviews = get_request(endpoint)
 
-        logger.debug(f"Fetching dealer reviews for ID: {dealer_id} -> Response: {reviews}")
-
         if not reviews:
-            return JsonResponse({"status": 404, "error": "No reviews found for this dealer"})
+            return json_response({"status": 404, "error": "No reviews found for this dealer"})
 
         for review in reviews:
             response = analyze_review_sentiments(review['review'])
             review['sentiment'] = response.get('sentiment', "neutral")
 
-        return JsonResponse({"status": 200, "reviews": reviews})
+        return json_response({"status": 200, "reviews": reviews})
     except Exception as e:
-        logger.error(f"Error fetching dealer reviews: {e}")
-        return JsonResponse({"status": 500, "error": "Failed to retrieve reviews"})
+        logger.error(f"❌ Error fetching dealer reviews: {e}")
+        return json_response({"status": 500, "error": "Failed to retrieve reviews"})
 
-# ✅ Add a dealer review
+# ===== 📝 Add a Dealer Review =====
+
 @csrf_exempt
 def add_review(request):
+    if request.method != "POST":
+        return json_response({"status": 405, "message": "Method Not Allowed"}, status=405)
+
     if not request.user.is_authenticated:
-        return JsonResponse({"status": 403, "message": "Unauthorized"})
+        return json_response({"status": 403, "message": "Unauthorized"}, status=403)
     
     try:
         data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return json_response({"status": 400, "message": "Invalid JSON format"}, status=400)
+
+    try:
         response = post_review(data)
 
-        logger.debug(f"Submitting review: {data} -> Response: {response}")
-
         if not response:
-            return JsonResponse({"status": 500, "message": "Failed to submit review"})
+            return json_response({"status": 500, "message": "Failed to submit review"})
 
-        return JsonResponse({"status": 200, "response": response})
+        return json_response({"status": 200, "response": response})
     except Exception as e:
-        logger.error(f"Error submitting review: {e}")
-        return JsonResponse({"status": 500, "message": f"Error: {str(e)}"})
+        logger.error(f"❌ Error submitting review: {e}")
+        return json_response({"status": 500, "message": "Error submitting review"})
