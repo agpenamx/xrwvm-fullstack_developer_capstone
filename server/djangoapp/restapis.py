@@ -10,8 +10,15 @@ load_dotenv()
 backend_url = os.getenv('backend_url', default="http://localhost:3030").rstrip("/")  # ✅ Ensure no trailing slash
 sentiment_analyzer_url = os.getenv('sentiment_analyzer_url', default="http://localhost:5050/").rstrip("/")  # ✅ Ensure no trailing slash
 
-# ✅ Improved GET Request Handling
-def get_request(endpoint, **kwargs):
+# ✅ Improved GET Request Handling (deep seek change )
+def get_request(url, **kwargs):
+    try:
+        response = requests.get(url, headers={'Content-Type': 'application/json'}, params=kwargs)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print("Network exception:", e)
+    return response.json()
+   
     """
     Function to make GET requests to the backend API.
 
@@ -48,6 +55,9 @@ def get_request(endpoint, **kwargs):
 
 # ✅ FIXED `analyze_review_sentiments` Function
 def analyze_review_sentiments(text):
+    # ✅ FIXED: Use environment variable
+    url = os.getenv('sentiment_analyzer_url') + "/analyze/" + text
+    return get_request(url)
     """
     Function to analyze sentiment using the deployed microservice.
 

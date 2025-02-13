@@ -1,43 +1,41 @@
-"""djangoproj URL Configuration
+"""
+djangoproj URL Configuration
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/3.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+Defines URL patterns for Django, including admin panel, API endpoints, and frontend routes.
 """
 
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.views.generic import TemplateView
 from django.conf.urls.static import static
 from django.conf import settings
 from djangoapp import views  # ✅ Import views for API endpoints
 
 urlpatterns = [
+    # ✅ Admin Panel
     path('admin/', admin.site.urls),
-    path('login/', TemplateView.as_view(template_name="index.html")),
-    path('register/', TemplateView.as_view(template_name="index.html")),
-    path('djangoapp/', include('djangoapp.urls')),
+
+    # ✅ AUTHENTICATION ROUTES (🔧 FIXED: Use views instead of templates)
+    path('login/', views.login_user, name='login'),  
+    path('register/', views.register_user, name='register'),  
+    path('logout/', views.logout_user, name='logout'),  
+
+    # ✅ STATIC PAGES (Frontend HTML templates)
     path('about/', TemplateView.as_view(template_name="About.html")),
     path('contact/', TemplateView.as_view(template_name="Contact.html")),
-    path('', TemplateView.as_view(template_name="Home.html")),
-
-    # ✅ FRONTEND ROUTES (Handled by React)
-    path('dealers/', TemplateView.as_view(template_name="index.html")),
-    path('dealer/<int:dealer_id>/', TemplateView.as_view(template_name="index.html")),
-    path('postreview/<int:dealer_id>/', TemplateView.as_view(template_name="index.html")),
+    path('', TemplateView.as_view(template_name="Home.html")),  # ✅ Fix for home page
 
     # ✅ BACKEND API ROUTES (Django Serves JSON Responses)
-    path('api/get_dealers/', views.get_dealerships, name='api_get_dealers'),
+    path('api/get_dealers/', views.get_dealerships, name='api_get_dealers'),  
     path('api/dealer/<int:dealer_id>/', views.get_dealer_details, name='api_dealer_details'),
     path('api/reviews/dealer/<int:dealer_id>/', views.get_dealer_reviews, name='api_dealer_reviews'),
     path('api/add_review/', views.add_review, name='api_add_review'),
+
+    # ✅ FRONTEND ROUTES (Handled by React)
+    path('dealers/', TemplateView.as_view(template_name="Home.html")),  # ✅ FIX: Ensure correct template
+    path('dealer/<int:dealer_id>/', TemplateView.as_view(template_name="index.html")),
+    path('postreview/<int:dealer_id>/', TemplateView.as_view(template_name="index.html")),
+
+    # ✅ React Catch-All Route (Handles React Routing)
+    re_path(r'^.*$', TemplateView.as_view(template_name='index.html'), name='react-app'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

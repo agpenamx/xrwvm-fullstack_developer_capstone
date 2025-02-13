@@ -6,6 +6,7 @@ import logging
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
+import requests  # ✅ Added to enable API calls
 from .models import CarMake, CarModel  
 from .populate import initiate  
 from .restapis import get_request, analyze_review_sentiments, post_review  
@@ -21,11 +22,14 @@ def login_user(request):
         username = data.get('userName')
         password = data.get('password')
 
-        # 🔧 SUGGESTION: Ensure that the JSON keys 'userName' and 'password' match those sent from the front end.
         user = authenticate(username=username, password=password)
         if user is not None:
             login(request, user)
-            return JsonResponse({"userName": username, "status": "Authenticated"})
+            response = JsonResponse({"userName": username, "status": "Authenticated"})
+            # 🔧 Markup: Ensure session persists after login
+            # return JsonResponse({"userName": username, "status": "Authenticated"})  # ❌ Previous version (session may not persist)
+            response.set_cookie("sessionid", request.session.session_key)  # ✅ Added session persistence
+            return response
         else:
             return JsonResponse({"userName": username, "error": "Invalid credentials"}, status=401)
     except Exception as e:
@@ -37,7 +41,7 @@ def logout_user(request):
     return JsonResponse({"userName": ""})
 
 @csrf_exempt
-def register_user(request):  # ✅ Changed from `registration` to `register_user`
+def register_user(request):
     try:
         data = json.loads(request.body)
         username = data.get('userName')
@@ -55,8 +59,12 @@ def register_user(request):  # ✅ Changed from `registration` to `register_user
         user = User.objects.create_user(
             username=username, first_name=first_name, last_name=last_name, password=password, email=email
         )
+        # ✅ FIXED: Explicitly save session before returning (deep seek)
         login(request, user)
-        return JsonResponse({"userName": username, "status": "Authenticated"})
+        request.session.save()  # 🔥 Critical for session persistence
+        response = JsonResponse({"userName": username, "status": "Authenticated"})
+        response.set_cookie("sessionid", request.session.session_key, httponly=True, samesite='Lax')
+        return response #(deep seek end of code added or replaced)
     except Exception as e:
         logger.error(f"Registration error: {e}")
         return JsonResponse({"error": "An error occurred while registering"}, status=500)
@@ -66,35 +74,72 @@ def get_cars(request):
     try:
         count = CarMake.objects.count()
         if count == 0:
-            # 🔧 SUGGESTION: This will populate the DB if no CarMake exists.
             initiate()  
         car_models = CarModel.objects.select_related('car_make')
-        # 🔧 SUGGESTION: Consider expanding the returned data if needed.
         cars = [{"CarModel": car_model.name, "CarMake": car_model.car_make.name} for car_model in car_models]
         return JsonResponse({"CarModels": cars})
     except Exception as e:
         logger.error(f"Error fetching car models: {e}")
         return JsonResponse({"error": "Failed to retrieve cars"}, status=500)
 
-# ✅ Fetch Dealerships with State Filtering
+# ✅ Fetch Dealerships with Authentication & JSON Validation
+# ✅ Fetch Dealerships with Authentication & Session Handling
 def get_dealerships(request, state="All"):
     """
     Fetches all dealerships from the backend API.
-    If a state is provided and is not "All", filters dealerships by that state.
-    Returns a JSON response.
+    - Ensures authentication by passing the session ID.
+    - If authentication fails, returns an error.
+    - Prevents JSONDecodeError by verifying content type.
     """
-    # 🔧 SUGGESTION: Use '/fetchDealers' for all dealers; for a specific state, append the state to the endpoint.
+    session = requests.Session()  # ✅ Create session for cookies
+
     endpoint = "/fetchDealers" if state == "All" else f"/fetchDealers/{state}"
-    dealerships = get_request(endpoint)
 
-    logger.debug(f"Fetching dealers for state: {state} -> Response: {dealerships}")
+    headers = {}  # ✅ Prepare headers
 
-    if not dealerships:
-        return JsonResponse({"status": 500, "error": "No dealerships found or backend API failed."})
+    # 🔧 FIX: Properly handle authentication
+    if request.user.is_authenticated:
+        session_cookies = request.COOKIES
+        headers["Cookie"] = "; ".join([f"{key}={value}" for key, value in session_cookies.items()])
 
-    return JsonResponse({"status": 200, "dealers": dealerships})
+        # ✅ Pass Django session ID explicitly
+        session_id = request.session.session_key
+        if session_id:
+            headers["Authorization"] = f"Bearer {session_id}"  # 🔥 Added explicit session handling
 
-# ✅ Fetch dealer details by ID (Fixed Definition)
+        logger.debug(f"🔍 Using session cookies: {headers['Cookie']}")  
+    else:
+        logger.error("❌ User is not authenticated. Access denied.")
+        return JsonResponse({"error": "User not authenticated", "status": 403})
+
+    try:
+       # ✅ FIXED: Use Docker service name instead of localhost
+        BACKEND_SERVICE_HOST = os.getenv("BACKEND_SERVICE_HOST", "backend-service")  # Match docker-compose service name
+        response = session.get(f"http://{BACKEND_SERVICE_HOST}:8888{endpoint}", headers=headers)
+
+        # ✅ LOG response headers and content for debugging
+        logger.debug(f"🔍 Response Status: {response.status_code}")
+        logger.debug(f"🔍 Response Headers: {response.headers}")
+        logger.debug(f"🔍 Response Content (First 500 chars): {response.text[:500]}")  
+
+        # 🔧 FIX: If response is not JSON, handle it
+        content_type = response.headers.get("Content-Type", "")
+        if "application/json" not in content_type:
+            logger.error("❌ API did not return JSON. Possible OAuth issue.")
+            return JsonResponse({"status": 500, "error": "Backend returned non-JSON response. Check authentication."})
+
+        # ✅ Now we are sure it's JSON, so we can safely parse it
+        return JsonResponse({"status": 200, "dealers": response.json()})
+
+    except requests.exceptions.JSONDecodeError as json_err:
+        logger.error(f"❌ JSON Decode Error: {json_err}")
+        return JsonResponse({"status": 500, "error": "Invalid JSON received from backend"})
+
+    except requests.exceptions.RequestException as req_err:
+        logger.error(f"❌ Network Exception: {req_err}")
+        return JsonResponse({"status": 500, "error": f"Request failed: {str(req_err)}"})
+
+# ✅ Fetch dealer details by ID
 def get_dealer_details(request, dealer_id):
     try:
         endpoint = f"/fetchDealer/{dealer_id}"
@@ -110,7 +155,7 @@ def get_dealer_details(request, dealer_id):
         logger.error(f"Error fetching dealer details: {e}")
         return JsonResponse({"status": 500, "error": "Failed to retrieve dealer details"})
 
-# ✅ Fetch dealer reviews by ID (Fixed error handling)
+# ✅ Fetch dealer reviews by ID
 def get_dealer_reviews(request, dealer_id):
     try:
         endpoint = f"/fetchReviews/dealer/{dealer_id}"
@@ -121,7 +166,6 @@ def get_dealer_reviews(request, dealer_id):
         if not reviews:
             return JsonResponse({"status": 404, "error": "No reviews found for this dealer"})
 
-        # 🔧 SUGGESTION: Process each review to add sentiment using the sentiment analyzer service.
         for review in reviews:
             response = analyze_review_sentiments(review['review'])
             review['sentiment'] = response.get('sentiment', "neutral")
